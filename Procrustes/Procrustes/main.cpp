@@ -7,11 +7,14 @@
 //
 
 #include <iostream>
+#include <fstream>
 #include <opencv2/opencv.hpp>
 #include "Procrustes.h"
 
 using namespace std;
 using namespace cv;
+
+enum State {START, INIT, READING, END};
 
 vector<Mat> generateTestData( int size ) {
 //    srand(static_cast<unsigned int>(time(NULL)));
@@ -23,27 +26,91 @@ vector<Mat> generateTestData( int size ) {
     RNG rng;
     rng.fill( X, RNG::NORMAL, Scalar( 250, 250 ), Scalar( 80, 80 ) );
     result.push_back( X );
-    
+   
     for( int i = 1; i < size; i++ ) {
         float scale = ((rand() % 100) + 25) / 100.0;
         Scalar translation( (rand() % 600) + 100, (rand() % 300) );
-        
+
         /* Transform Y so that it's rotated and translated version of X */
         float angle = (rand() % 90) * 180.0 / M_PI;
         Mat S = (Mat_<float>(2,2) << cosf(angle), -sinf(angle), sinf(angle), cosf( angle) );
         Mat Y;
         cv::transform( scale * X, Y, S );
         Y += translation;
-        
+
         /* Jitter the Y points a bit, so that it's not exactly transformed version of X */
-        Mat jitter( Y.size(), Y.type() );
+       Mat jitter( Y.size(), Y.type() );
         rng.fill( jitter, RNG::NORMAL, Scalar(0, 0), Scalar( 5, 5 ));
         Y += jitter;
         
         result.push_back( Y );
     }
-    
+
     return result;
+}
+
+vector<Mat> readFromFile()
+{
+    string temp;
+    vector<Mat> samples;
+
+    State state = START;
+    int i=0, j = 0;
+    float** pointArray;
+
+    ifstream iFile;
+    iFile.open("/home/stevie/Projects/sandbox_subokita/Sandbox/Procrustes/Procrustes/vert.shape");
+
+    while (iFile >> temp)
+    {
+        if (temp == "}")
+            state = END;
+
+        switch (state)
+        {
+            case START:
+                break;
+            case INIT:
+            {
+                pointArray = new float*[40];
+                for (int k = 0; k < 40; ++k)
+                    pointArray[k] = new float[2];
+                i = 0;
+                state = READING;
+                break;
+            }
+            case READING:
+            {
+                j %= 2;
+                float x= atoi(temp.c_str());
+                pointArray[i][j] = x;
+                if (j%2 == 1) ++i;
+                j++;
+                break;
+            }
+            case END:
+            {
+                Mat sample(40,2, CV_32FC2, &pointArray);
+                samples.push_back(sample);
+                state = INIT;
+                break;
+            }
+
+        }
+
+        if (temp == "{")
+        {
+            state =INIT;
+           // iFile >> temp;
+            iFile >> temp;
+        }
+        else if (temp == "}")
+            state = END;
+
+    }
+    iFile.close();
+
+    return samples;
 }
 
 /**
@@ -96,7 +163,7 @@ void generalizedProcrustesTest() {
     moveWindow( "", 0, 0 );
     
     /* First we generate 6 set of points */
-    vector<Mat> points = generateTestData( 6 );
+    vector<Mat> points = readFromFile();
     
     /* Colors to differentiate each set of points */
     const vector<Scalar> colors = {
@@ -106,11 +173,13 @@ void generalizedProcrustesTest() {
         Scalar( 255, 255, 0 ),
         Scalar( 0, 255, 255 ),
         Scalar( 255, 0, 255 ),
+        Scalar( 67, 156, 234),
+        Scalar(236, 15, 135)
     };
     
     /* Plot the points out */
-    Mat img(600, 900, CV_8UC3, Scalar(255, 255, 255) );
-    for( int i = 0; i < 6; i++ )
+    Mat img(1000, 1000, CV_8UC3, Scalar(255, 255, 255) );
+    for( int i = 0; i < 8; i++ )
         plot( img, points[i], colors[i] );
     
     imshow( "", img );
